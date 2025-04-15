@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Menu, X, Home, FileText, Users, Activity, Brain, Heart } from 'lucide-react'
+import { Menu, X, Home, FileText, Users, Activity, Brain, Heart, MapPin, Image } from 'lucide-react'
 import { HeartIcon } from '@heroicons/react/24/outline'
 import BloodPressurePrediction from './BloodPressurePrediction'
 
@@ -30,6 +30,8 @@ const Sidebar = () => {
     { name: 'Heart Prediction', href: '/heart-prediction', icon: Heart },
     { name: 'Lung Prediction', href: '/lung-prediction', icon: Activity },
     { name: 'Anemia Prediction', href: '/anemia-prediction', icon: Activity },
+    { name: 'Nearby', href: '/nearby', icon: MapPin },
+    { name: 'Skin Disease', href: '/skin-disease', icon: Image },
   ]
 
   return (
