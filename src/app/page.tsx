@@ -208,9 +208,26 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-center text-black mb-12">Some Reviews</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { name: 'John D.', role: 'Patient', text: 'Excellent service and care!' },
-              { name: 'Sarah M.', role: 'Patient', text: 'Very professional staff.' },
-              { name: 'Mike R.', role: 'Patient', text: 'Great medical facility!' }
+              { 
+                name: 'Santosh', 
+                role: 'Patient', 
+                text: 'The medical team was incredibly professional and caring. They took the time to explain everything in detail and made me feel comfortable throughout my treatment. The follow-up care was exceptional!' 
+              },
+              { 
+                name: 'Biswa', 
+                role: 'Patient', 
+                text: 'I was impressed by the state-of-the-art facilities and the efficiency of the staff. The doctors were knowledgeable and the nurses were very attentive. The digital health records system made everything so convenient.' 
+              },
+              { 
+                name: 'Rinku', 
+                role: 'Patient', 
+                text: 'From the moment I walked in, I felt welcomed and cared for. The doctors were thorough in their diagnosis and the treatment plan was well-explained. The recovery process was smooth thanks to their excellent care.' 
+              },
+              { 
+                name: 'Rohit', 
+                role: 'Patient', 
+                text: 'The hospital has a great atmosphere and the staff is very friendly. The doctors are experts in their fields and the support staff is always ready to help. I would definitely recommend this hospital to others.' 
+              }
             ].map((review, index) => (
               <div key={index} className="bg-gray-50 p-6 rounded-lg">
                 <div className="flex items-center gap-1 text-yellow-400 mb-4">
@@ -257,53 +274,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Heart className="h-6 w-6 text-blue-400" />
-                <span className="text-lg font-bold">MedicalWallet</span>
-              </div>
-              <p className="text-gray-400 text-sm">
-                Your trusted partner in healthcare management.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Quick Links</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="/about">About Us</Link></li>
-                <li><Link href="/services">Services</Link></li>
-                <li><Link href="/doctors">Doctors</Link></li>
-                <li><Link href="/contact">Contact</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Departments</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li>Cardiology</li>
-                <li>Neurology</li>
-                <li>Pediatrics</li>
-                <li>Orthopedics</li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Contact Us</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li>123 Medical Center</li>
-                <li>New York, NY 10001</li>
-                <li>+1 (555) 123-4567</li>
-                <li>contact@medicalwallet.com</li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 MedicalWallet. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }
