@@ -2,15 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import { Search, Filter, ChevronDown, Eye, Download, FileText, User, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { firebaseService } from '@/lib/firebaseService';
 
 interface Patient {
   id: string;
@@ -48,7 +43,6 @@ interface Patient {
     geneticConditions: string[];
     medicalDocuments?: { title: string; url: string; uploadedAt: string }[];
   };
-  created_at: string;
   uploadedFiles: {
     name: string;
     url: string;
@@ -69,6 +63,7 @@ export default function AdminDashboard() {
     bloodGroup: '',
     maritalStatus: ''
   });
+  const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
@@ -82,138 +77,49 @@ export default function AdminDashboard() {
     loadPatients();
   }, []);
 
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = patients.filter(patient =>
+        patient.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        patient.nationalId.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredPatients(filtered);
+    } else {
+      setFilteredPatients(patients);
+    }
+  }, [searchTerm, patients]);
+
   const loadPatients = async () => {
     try {
       setLoading(true);
       console.log('Starting to load patients...');
 
-      // Get all files from the demo-user directory
-      const { data: files, error } = await supabase.storage
-        .from('new')
-        .list('users/demo-user', {
-          limit: 100,
-          offset: 0
-        });
-console.log(files)
-      if (error) {
-        console.error('Error listing files:', error);
-        throw new Error(`Supabase error: ${error.message}`);
-      }
-
-      if (!files || files.length === 0) {
-        console.log('No files found in the bucket');
-        setPatients([]);
-        return;
-      }
-
-      console.log('Found files:', files);
-      
-      // Get all user data files
-      const userDataPromises = files
-        .filter(file => file.name.endsWith('_data.json'))
-        .map(async (file) => {
-          console.log(file)
-          try {
-            console.log('Processing file:', file.name);
-            
-            // Download the data file
-            const { data: fileData, error: downloadError } = await supabase.storage
-              .from('new')
-              .download(`users/demo-user/${file.name}`);
-            console.log(fileData)
-            if (downloadError) {
-              console.error(`Error downloading ${file.name}:`, downloadError);
-              return null;
-            }
-
-            if (fileData) {
-              const text = await fileData.text();
-              const patientData = JSON.parse(text);
-              console.log(patientData)
-              // Get profile photo URL if exists
-              const photoPath = `users/demo-user/files/${patientData.id}_person.jpg`;
-              const { data: photoData } = await supabase.storage
-                .from('new')
-                .getPublicUrl(photoPath);
-              console.log(photoData)
-              if (photoData) {
-                patientData.profilePhoto = photoData.publicUrl;
-              }
-
-              // Get uploaded files
-              const { data: uploadedFiles } = await supabase.storage
-                .from('new')
-                .list(`users/demo-user/files/${patientData.id}_person.jpg`);
-              console.log(uploadedFiles)
-              if (uploadedFiles) {
-                patientData.uploadedFiles = await Promise.all(
-                  uploadedFiles.map(async (file) => {
-                    const { data: fileUrl } = await supabase.storage
-                      .from('new')
-                      .getPublicUrl(`users/demo-user/files/${patientData.id}_person.jpg`);
-                    
-                    return {
-                      name: file.name,
-                      url: fileUrl.publicUrl,
-                      type: file.metadata?.contentType || 'application/octet-stream',
-                      uploadedAt: file.created_at
-                    };
-                  })
-                );
-              }
-
-              // Get medical documents if they exist
-              const { data: medicalDocs } = await supabase.storage
-                .from('new')
-                .list(`users/demo-user/files/${patientData.id}/medical_documents`);
-              
-              if (medicalDocs) {
-                patientData.medicalDocuments = await Promise.all(
-                  medicalDocs.map(async (doc) => {
-                    const { data: docUrl } = await supabase.storage
-                      .from('new')
-                      .getPublicUrl(`users/demo-user/files/${patientData.id}/medical_documents/${doc.name}`);
-                    
-                    return {
-                      title: doc.name,
-                      url: docUrl.publicUrl,
-                      type: doc.metadata?.contentType || 'application/octet-stream',
-                      uploadedAt: doc.created_at
-                    };
-                  })
-                );
-              }
-
-              console.log('Successfully processed patient:', patientData.id);
-              return patientData;
-            }
-          } catch (error) {
-            console.error(`Error processing ${file.name}:`, error);
-            return null;
-          }
-          return null;
-        });
-console.log(userDataPromises)
-      const userData = (await Promise.all(userDataPromises)).filter(Boolean);
-      console.log('Total patients loaded:', userData);
-      setPatients(userData);
+      // Get all patients from Firebase
+      const patientsList = await firebaseService.getPatients();
+      setPatients(patientsList);
+      setFilteredPatients(patientsList);
     } catch (error) {
       console.error('Error loading patients:', error);
-      setPatients([]);
+      alert('Failed to load patients. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  // const filteredPatients = patients.filter(patient => {
-  //   const matchesSearch = patient.fullName?.toLowerCase().includes(searchTerm.toLowerCase());
-  //   const matchesGender = !filters.gender || patient.gender === filters.gender;
-  //   const matchesBloodGroup = !filters.bloodGroup || patient.bloodGroup === filters.bloodGroup;
-  //   const matchesMaritalStatus = !filters.maritalStatus || patient.maritalStatus === filters.maritalStatus;
-  //   return matchesSearch && matchesGender && matchesBloodGroup && matchesMaritalStatus;
-  // });
+  const handleDeletePatient = async (patientId: string) => {
+    if (!confirm('Are you sure you want to delete this patient?')) return;
 
-  // console.log(filteredPatients)
+    try {
+      await firebaseService.deletePatient(patientId);
+      setPatients(prev => prev.filter(p => p.id !== patientId));
+      setFilteredPatients(prev => prev.filter(p => p.id !== patientId));
+      alert('Patient deleted successfully');
+    } catch (error) {
+      console.error('Error deleting patient:', error);
+      alert('Failed to delete patient. Please try again.');
+    }
+  };
+
   const generatePatientPDF = (patient: Patient) => {
     const doc = new jsPDF();
     
@@ -248,7 +154,7 @@ console.log(userDataPromises)
     // Save the PDF
     doc.save(`${patient.fullName}-medical-record.pdf`);
   };
-console.log(patients)
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -325,7 +231,7 @@ console.log(patients)
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {patients.map((patient,index) => (
+              {filteredPatients.map((patient,index) => (
               
               <div
                 key={index}
@@ -337,7 +243,7 @@ console.log(patients)
                       {patient.profilePhoto ? (
                         <img
                           src={patient.profilePhoto}
-                          alt={patient.full_name}
+                          alt={patient.fullName}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -347,8 +253,8 @@ console.log(patients)
                       )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{patient.full_name}</h3>
-                      <p className="text-sm text-gray-500">ID: {patient.national_id}</p>
+                      <h3 className="text-lg font-semibold text-gray-900">{patient.fullName}</h3>
+                      <p className="text-sm text-gray-500">ID: {patient.nationalId}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -358,15 +264,15 @@ console.log(patients)
                     </div>
                     <div>
                       <p className="text-gray-500">Blood Group</p>
-                      <p className="font-medium">{patient.blood_group}</p>
+                      <p className="font-medium">{patient.bloodGroup}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Marital Status</p>
-                      <p className="font-medium">{patient.marital_status}</p>
+                      <p className="font-medium">{patient.maritalStatus}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">National ID</p>
-                      <p className="font-medium">{patient.national_id}</p>
+                      <p className="font-medium">{patient.nationalId}</p>
                     </div>
                   </div>
                   <div className="mt-6 flex justify-end gap-2">

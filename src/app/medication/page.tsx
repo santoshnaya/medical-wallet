@@ -2,13 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { Plus, Clock, AlertCircle, Trash2, Edit2 } from 'lucide-react';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { firebaseService } from '@/lib/firebaseService';
 
 interface Medication {
   id: string;
@@ -36,78 +31,19 @@ export default function MedicationTracker() {
   });
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const userId = localStorage.getItem('userId');
-      const isAuthenticated = localStorage.getItem('isAuthenticated');
-      
-      if (!userId || !isAuthenticated) {
-        router.push('/login');
-        return;
-      }
-
-      try {
-        await loadMedications(userId);
-      } catch (error) {
-        console.error('Error loading medications:', error);
-        alert('Failed to load medications. Please try again later.');
-      }
-    };
-
-    checkAuth();
-  }, [router]);
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      loadMedications(userId);
+    }
+  }, []);
 
   const loadMedications = async (userId: string) => {
     try {
       setLoading(true);
-      console.log('Loading medications for user:', userId);
-
-      // List all medication files for the user
-      const { data: files, error: listError } = await supabase.storage
-        .from('new')
-        .list(`medication-timetable/${userId}`);
-
-      if (listError) {
-        console.error('Error listing medication files:', listError);
-        throw listError;
-      }
-
-      if (!files || files.length === 0) {
-        console.log('No medication files found');
-        setMedications([]);
-        return;
-      }
-
-      // Get all medication data files
-      const medicationPromises = files
-        .filter(file => file.name.endsWith('_medication.json'))
-        .map(async (file) => {
-          try {
-            // Download the data file
-            const { data: fileData, error: downloadError } = await supabase.storage
-              .from('new')
-              .download(`medication-timetable/${userId}/${file.name}`);
-            
-            if (downloadError) {
-              console.error(`Error downloading ${file.name}:`, downloadError);
-              return null;
-            }
-
-            if (fileData) {
-              const text = await fileData.text();
-              return JSON.parse(text);
-            }
-          } catch (error) {
-            console.error(`Error processing ${file.name}:`, error);
-            return null;
-          }
-          return null;
-        });
-
-      const medications = (await Promise.all(medicationPromises)).filter(Boolean);
-      console.log('Loaded medications:', medications);
+      const medications = await firebaseService.getMedications(userId);
       setMedications(medications);
     } catch (error) {
-      console.error('Error in loadMedications:', error);
+      console.error('Error loading medications:', error);
       alert('Failed to load medications. Please try again later.');
       setMedications([]);
     } finally {
@@ -124,34 +60,17 @@ export default function MedicationTracker() {
     }
 
     try {
-      const timestamp = new Date().getTime();
       const medicationData = {
         ...formData,
-        id: crypto.randomUUID(),
         userId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      // Convert medication data to JSON blob
-      const jsonBlob = new Blob([JSON.stringify(medicationData, null, 2)], {
-        type: 'application/json'
-      });
-
-      // Upload to Supabase storage
-      const { error: uploadError } = await supabase.storage
-        .from('new')
-        .upload(
-          `medication-timetable/${userId}/${timestamp}_medication.json`,
-          jsonBlob,
-          {
-            contentType: 'application/json',
-            upsert: true
-          }
-        );
-
-      if (uploadError) {
-        throw uploadError;
+      if (editingMedication) {
+        await firebaseService.updateMedication(editingMedication.id, medicationData);
+      } else {
+        await firebaseService.saveMedication(medicationData);
       }
 
       // Refresh the medications list
@@ -177,15 +96,14 @@ export default function MedicationTracker() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('medications')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      loadMedications(localStorage.getItem('userId') || '');
+      await firebaseService.deleteMedication(id);
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        loadMedications(userId);
+      }
     } catch (error) {
       console.error('Error deleting medication:', error);
+      alert('Failed to delete medication. Please try again.');
     }
   };
 

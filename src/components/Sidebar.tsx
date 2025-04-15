@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Menu, X, Home, User, MapPin, Image as ImageIcon, FileText, Upload, Pill } from 'lucide-react'
+import { Menu, X, Home, FileText, Users, Activity, Brain, Heart } from 'lucide-react'
+import { HeartIcon } from '@heroicons/react/24/outline'
+import BloodPressurePrediction from './BloodPressurePrediction'
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false)
+  const [showBloodPressurePrediction, setShowBloodPressurePrediction] = useState(false)
 
   // Lock body scroll when sidebar is open
   useEffect(() => {
@@ -20,6 +23,14 @@ const Sidebar = () => {
   }, [isOpen])
 
   const toggleSidebar = () => setIsOpen(!isOpen)
+
+  const navigation = [
+    { name: 'Dashboard', href: '/', icon: Home },
+    { name: 'Patients', href: '/patients', icon: Users },
+    { name: 'Heart Prediction', href: '/heart-prediction', icon: Heart },
+    { name: 'Lung Prediction', href: '/lung-prediction', icon: Activity },
+    { name: 'Anemia Prediction', href: '/anemia-prediction', icon: Activity },
+  ]
 
   return (
     <div className={`${isOpen ? 'relative z-50' : ''}`}>
@@ -54,54 +65,24 @@ const Sidebar = () => {
           </div>
           
           <nav className="space-y-2">
-            <Link
-              href="/"
+            {navigation.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
+                onClick={toggleSidebar}
+              >
+                <item.icon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">{item.name}</span>
+              </Link>
+            ))}
+            <button 
+              onClick={() => setShowBloodPressurePrediction(true)}
               className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
-              onClick={toggleSidebar}
             >
-              <Home className="h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Home</span>
-            </Link>
-            <Link
-              href="/user/dashboard"
-              className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
-              onClick={toggleSidebar}
-            >
-              <User className="h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Dashboard</span>
-            </Link>
-            <Link
-              href="/nearby"
-              className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
-              onClick={toggleSidebar}
-            >
-              <MapPin className="h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Nearby</span>
-            </Link>
-            <Link
-              href="/skin-disease"
-              className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
-              onClick={toggleSidebar}
-            >
-              <ImageIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Skin Disease</span>
-            </Link>
-            <Link
-              href="/prescription"
-              className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
-              onClick={toggleSidebar}
-            >
-              <FileText className="h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Prescription Analysis</span>
-            </Link>
-            <Link
-              href="/medication"
-              className="flex items-center gap-3 p-3 text-white hover:bg-white/10 rounded-lg transition-all duration-200 group"
-              onClick={toggleSidebar}
-            >
-              <Pill className="h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Medication Tracker</span>
-            </Link>
+              <HeartIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+              <span className="font-medium">Blood Pressure Prediction</span>
+            </button>
           </nav>
 
           <div className="absolute bottom-6 left-6 right-6">
@@ -113,6 +94,10 @@ const Sidebar = () => {
           </div>
         </div>
       </aside>
+
+      {showBloodPressurePrediction && (
+        <BloodPressurePrediction onClose={() => setShowBloodPressurePrediction(false)} />
+      )}
     </div>
   )
 }

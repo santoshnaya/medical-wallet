@@ -15,11 +15,11 @@ A comprehensive medical records management system built with modern web technolo
 - [Framer Motion](https://www.framer.com/motion/) - Animation library
 
 ### Authentication and Database
-- [Supabase](https://supabase.com/) - Open source Firebase alternative
-  - Database
+- [Firebase](https://firebase.google.com/) - Backend services
   - Authentication
-  - Storage
-- [Firebase](https://firebase.google.com/) - Backend services (optional)
+  - Firestore Database
+  - Cloud Storage
+  - Analytics
 
 ### AI and Machine Learning
 - [Google Gemini AI](https://ai.google.dev/) - AI model for chatbot functionality
@@ -56,10 +56,14 @@ A comprehensive medical records management system built with modern web technolo
 ## Environment Variables
 
 ```env
-
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-key
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-firebase-auth-domain
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-firebase-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-firebase-storage-bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-firebase-messaging-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-firebase-app-id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-firebase-measurement-id
 
 # Gemini AI Configuration
 NEXT_PUBLIC_GEMINI_API_KEY=your-gemini-api-key

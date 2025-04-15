@@ -5,13 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { QrCode, Download, Share2, Upload, FileText, Image, FileCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { createClient } from '@supabase/supabase-js';
 import { jsPDF } from 'jspdf';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { firebaseService } from '@/lib/firebaseService';
 
 interface UploadedFile {
   name: string;
@@ -25,8 +20,8 @@ interface Patient {
   fullName: string;
   dateOfBirth: string;
   gender: 'Male' | 'Female' | 'Other';
-  bloodGroup: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
-  maritalStatus: 'Single' | 'Married' | 'Divorced' | 'Widowed';
+  bloodGroup: string;
+  maritalStatus: string;
   nationalId: string;
   profilePhoto: string;
   contactInfo: {
@@ -56,7 +51,6 @@ interface Patient {
     geneticConditions: string[];
     medicalDocuments?: { title: string; url: string; uploadedAt: string }[];
   };
-  created_at: string;
   uploadedFiles: UploadedFile[];
 }
 
@@ -93,9 +87,9 @@ const defaultPatient: Patient = {
     smoking: { status: false, frequency: '' },
     alcohol: { status: false, frequency: '' },
     disabilities: [],
-    geneticConditions: []
+    geneticConditions: [],
+    medicalDocuments: []
   },
-  created_at: new Date().toISOString(),
   uploadedFiles: []
 };
 
@@ -111,94 +105,48 @@ export default function UserDashboard() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const userRole = localStorage.getItem('userRole');
-    
-    if (!isAuthenticated || userRole !== 'user') {
-      router.push('/login?role=user');
-      return;
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      loadPatientData(userId);
+    } else {
+      setLoading(false); // Set loading to false if no userId is found
     }
-
-    loadPatientData();
   }, []);
 
-  const loadPatientData = async () => {
+  const loadPatientData = async (userId: string) => {
     try {
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      
-      // Check if we have cached data
+      // Try to get data from local storage first
       const cachedData = localStorage.getItem(`patientData_${userId}`);
       if (cachedData) {
         setPatient(JSON.parse(cachedData));
+        setLoading(false);
+        return;
       }
 
-      // Try to get fresh data from Supabase
-      const { data, error } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to fetch patient data: ${error.message}`);
-      }
-
-      if (data) {
-        setPatient(data as Patient);
-        localStorage.setItem(`patientData_${userId}`, JSON.stringify(data));
+      // If no cached data, fetch from Firebase
+      const patientData = await firebaseService.getPatient(userId);
+      if (patientData) {
+        setPatient(patientData);
+        // Cache the data
+        localStorage.setItem(`patientData_${userId}`, JSON.stringify(patientData));
       } else {
-        // Create new patient if not exists
-        const newPatient = { ...defaultPatient, id: userId };
-        const { error: insertError } = await supabase
-          .from('patients')
-          .insert([newPatient]);
-
-        if (insertError) {
-          throw new Error(`Failed to create patient: ${insertError.message}`);
-        }
-
-        setPatient(newPatient);
-        localStorage.setItem(`patientData_${userId}`, JSON.stringify(newPatient));
+        // If no data exists, use the default patient data
+        setPatient(defaultPatient);
       }
     } catch (error) {
-      // If offline, try to load from cache
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      const cachedData = localStorage.getItem(`patientData_${userId}`);
-      if (cachedData) {
-        setPatient(JSON.parse(cachedData));
-      } else {
-        // If no cached data, set default patient
-        setPatient({ ...defaultPatient, id: userId });
-      }
+      console.error('Error loading patient data:', error);
+      // In case of error, use the default patient data
+      setPatient(defaultPatient);
     } finally {
       setLoading(false);
     }
   };
 
-  const updatePatientData = async (updates: Partial<Patient>) => {
-    try {
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      
-      // Update local state first
-      setPatient(prev => {
-        const updated = { ...prev, ...updates };
-        localStorage.setItem(`patientData_${userId}`, JSON.stringify(updated));
-        return updated;
-      });
-
-      // Try to update Supabase
-      const { error } = await supabase
-        .from('patients')
-        .update(updates)
-        .eq('id', userId);
-
-      if (error) {
-        throw new Error(`Failed to update patient data: ${error.message}`);
-      }
-    } catch (error) {
-      // If offline, the data is already cached in localStorage
-      // We can silently fail here since we've already updated the local state
-    }
+  const updatePatientData = (updates: Partial<Patient>) => {
+    setPatient(prev => ({
+      ...prev,
+      ...updates
+    }));
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fileType: string) => {
@@ -208,31 +156,16 @@ export default function UserDashboard() {
     try {
       setUploading(true);
       setUploadProgress(0);
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      const fileExt = file.name.split('.').pop();
-      const timestamp = new Date().getTime();
-      const fileName = `${userId}/${fileType}/${timestamp}-${file.name}`;
-      const filePath = `uploads/${fileName}`;
+      const userId = localStorage.getItem('userId');
+      if (!userId) return;
 
-      // Upload file to Supabase Storage
-      const { error: uploadError, data } = await supabase.storage
-        .from('new')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('new')
-        .getPublicUrl(filePath);
+      // Upload file to Firebase Storage
+      const { url, path } = await firebaseService.uploadFile(userId, file, fileType);
 
       // Add to patient's uploaded files
       const newFile: UploadedFile = {
         name: file.name,
-        url: publicUrl,
+        url,
         type: fileType,
         uploadedAt: new Date().toISOString()
       };
@@ -244,13 +177,13 @@ export default function UserDashboard() {
       // Update specific fields based on file type
       switch (fileType) {
         case 'profile-photo':
-          await updatePatientData({ profilePhoto: publicUrl });
+          await updatePatientData({ profilePhoto: url });
           break;
         case 'medical-documents':
           // Add to medical documents array
           const updatedDocuments = [...(patient.medicalHistory?.medicalDocuments || []), {
             title: file.name,
-            url: publicUrl,
+            url,
             uploadedAt: new Date().toISOString()
           }];
           await updatePatientData({
@@ -261,12 +194,11 @@ export default function UserDashboard() {
           });
           break;
       }
-
     } catch (error) {
       console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
     } finally {
       setUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -312,103 +244,14 @@ export default function UserDashboard() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      const timestamp = new Date().getTime();
+      const userId = localStorage.getItem('userId');
+      if (!userId) return;
       
       // Update local state and cache
       localStorage.setItem(`patientData_${userId}`, JSON.stringify(patient));
       
-      // Prepare data for Supabase storage
-      const patientData = {
-        id: userId,
-        full_name: patient.fullName || '',
-        date_of_birth: patient.dateOfBirth || '',
-        gender: patient.gender || 'Male',
-        blood_group: patient.bloodGroup || 'A+',
-        marital_status: patient.maritalStatus || 'Single',
-        national_id: patient.nationalId || '',
-        profile_photo: patient.profilePhoto || '',
-        contact_info: {
-          phone_number: patient.contactInfo.phoneNumber || '',
-          email: patient.contactInfo.email || '',
-          address: {
-            street: patient.contactInfo.address.street || '',
-            city: patient.contactInfo.address.city || '',
-            state: patient.contactInfo.address.state || '',
-            zip: patient.contactInfo.address.zip || ''
-          },
-          emergency_contact: {
-            name: patient.contactInfo.emergencyContact.name || '',
-            phone: patient.contactInfo.emergencyContact.phone || '',
-            relationship: patient.contactInfo.emergencyContact.relationship || ''
-          }
-        },
-        medical_history: {
-          past_illnesses: patient.medicalHistory.pastIllnesses || [],
-          surgeries: patient.medicalHistory.surgeries || [],
-          allergies: patient.medicalHistory.allergies || [],
-          chronic_diseases: patient.medicalHistory.chronicDiseases || [],
-          family_medical_history: patient.medicalHistory.familyMedicalHistory || '',
-          smoking: patient.medicalHistory.smoking || { status: false, frequency: '' },
-          alcohol: patient.medicalHistory.alcohol || { status: false, frequency: '' },
-          disabilities: patient.medicalHistory.disabilities || [],
-          genetic_conditions: patient.medicalHistory.geneticConditions || [],
-          medical_documents: patient.medicalHistory.medicalDocuments || []
-        },
-        uploaded_files: patient.uploadedFiles || [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Convert patient data to JSON string
-      const patientDataString = JSON.stringify(patientData);
-      
-      // Create a blob from the JSON string
-      const blob = new Blob([patientDataString], { type: 'application/json' });
-      
-      // Upload the JSON file to Supabase storage with a unique timestamp
-      const { error: storageError } = await supabase.storage
-        .from('new')
-        .upload(`users/${userId}/${timestamp}_data.json`, blob, {
-          contentType: 'application/json',
-          upsert: true
-        });
-
-      if (storageError) {
-        console.error('Storage error:', storageError);
-        alert('Failed to save data. Please try again.');
-        return;
-      }
-
-      // Save uploaded files to Supabase storage
-      if (patient.uploadedFiles && patient.uploadedFiles.length > 0) {
-        for (const file of patient.uploadedFiles) {
-          try {
-            // Check if file is already in storage
-            const { data: existingFile } = await supabase.storage
-              .from('new')
-              .list(`users/${userId}/files`);
-
-            if (!existingFile?.some(f => f.name === file.name)) {
-              // Upload file to storage
-              const response = await fetch(file.url);
-              const blob = await response.blob();
-              
-              const { error: fileError } = await supabase.storage
-                .from('new')
-                .upload(`users/${userId}/files/${timestamp}_${file.name}`, blob);
-
-              if (fileError) {
-                console.error(`Failed to upload file ${file.name}:`, fileError);
-                alert(`Failed to upload file ${file.name}. Please try again.`);
-              }
-            }
-          } catch (error) {
-            console.error(`Error processing file ${file.name}:`, error);
-            alert(`Error processing file ${file.name}. Please try again.`);
-          }
-        }
-      }
+      // Save to Firebase
+      await firebaseService.savePatient(userId, patient);
 
       setShowQR(true);
     } catch (error) {
@@ -992,30 +835,31 @@ export default function UserDashboard() {
             </button>
           </div>
 
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {activeTab === 'basic' && renderBasicInfo()}
-              {activeTab === 'contact' && renderContactInfo()}
-              {activeTab === 'medical' && renderMedicalHistory()}
-              {activeTab === 'uploads' && renderUploadSection()}
+          {loading && (
+            <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
           )}
+
+          <div className="space-y-6 relative">
+            {activeTab === 'basic' && renderBasicInfo()}
+            {activeTab === 'contact' && renderContactInfo()}
+            {activeTab === 'medical' && renderMedicalHistory()}
+            {activeTab === 'uploads' && renderUploadSection()}
+          </div>
 
           <div className="mt-8 flex justify-end gap-4">
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || loading}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save & Generate QR'}
             </button>
             <button
               onClick={generatePDF}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              disabled={loading}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
             >
               Generate PDF
             </button>
