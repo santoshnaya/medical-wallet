@@ -6,7 +6,11 @@ import { Heart, Stethoscope, FileText, Info } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import ChatBot from '@/components/ChatBot';
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin"],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: "Medical Wallet",
@@ -19,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} min-h-screen bg-gray-50`}>
         <Sidebar />
         {/* Navbar */}
